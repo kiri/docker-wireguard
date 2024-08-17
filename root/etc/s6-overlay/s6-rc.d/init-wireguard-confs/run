@@ -62,6 +62,13 @@ DUDE"
                     break
                 fi
                 done
+                for idx in $(for i in {2..255}; do printf '%x\n' $i ; done); do
+                PROPOSED_IP6="${INTERFACE6}:${idx}"
+                if ! grep -q -R "${PROPOSED_IP6}" /config/peer*/*.conf 2>/dev/null && ([[ -z "${ORIG_INTERFACE6}" ]] || ! grep -q -R "${ORIG_INTERFACE6}:${idx}" /config/peer*/*.conf 2>/dev/null); then
+                    CLIENT_IP6="${PROPOSED_IP6}"
+                    break
+                fi
+                done
             fi
             if [[ -f "/config/${PEER_ID}/presharedkey-${PEER_ID}" ]]; then
                 # create peer conf with presharedkey
@@ -95,11 +102,11 @@ DUDE
             if [[ -n "${!SERVER_ALLOWEDIPS}" ]]; then
                 echo "Adding ${!SERVER_ALLOWEDIPS} to wg0.conf's AllowedIPs for peer ${i}"
                 cat <<DUDE >> /config/wg_confs/wg0.conf
-AllowedIPs = ${CLIENT_IP}/32,${!SERVER_ALLOWEDIPS}
+AllowedIPs = ${CLIENT_IP}/32,${CLIENT_IP6}/128,${!SERVER_ALLOWEDIPS}
 DUDE
             else
                 cat <<DUDE >> /config/wg_confs/wg0.conf
-AllowedIPs = ${CLIENT_IP}/32
+AllowedIPs = ${CLIENT_IP}/32,${CLIENT_IP6}/128
 DUDE
             fi
             # add PersistentKeepalive if the peer is specified
@@ -131,6 +138,7 @@ ORIG_SERVERPORT="$SERVERPORT"
 ORIG_PEERDNS="$PEERDNS"
 ORIG_PEERS="$PEERS"
 ORIG_INTERFACE="$INTERFACE"
+ORIG_INTERFACE6="$INTERFACE6"
 ORIG_ALLOWEDIPS="$ALLOWEDIPS"
 ORIG_PERSISTENTKEEPALIVE_PEERS="$PERSISTENTKEEPALIVE_PEERS"
 DUDE
@@ -156,8 +164,11 @@ if [[ -n "$PEERS" ]]; then
     SERVERPORT=${SERVERPORT:-51820}
     echo "**** External server port is set to ${SERVERPORT}. Make sure that port is properly forwarded to port 51820 inside this container ****"
     INTERNAL_SUBNET=${INTERNAL_SUBNET:-10.13.13.0}
+    INTERNAL_SUBNET6=${INTERNAL_SUBNET6:-fd00::}
     echo "**** Internal subnet is set to $INTERNAL_SUBNET ****"
     INTERFACE=$(echo "$INTERNAL_SUBNET" | awk 'BEGIN{FS=OFS="."} NF--')
+    echo "**** Internal subnet ipv6 is set to $INTERNAL_SUBNET6 ****"
+    INTERFACE6=$(echo "$INTERNAL_SUBNET6" | awk 'BEGIN{FS=OFS=":"} NF--')
     ALLOWEDIPS=${ALLOWEDIPS:-0.0.0.0/0, ::/0}
     echo "**** AllowedIPs for peers $ALLOWEDIPS ****"
     if [[ -z "$PEERDNS" ]] || [[ "$PEERDNS" = "auto" ]]; then
@@ -175,7 +186,7 @@ if [[ -n "$PEERS" ]]; then
         if [[ -f /config/.donoteditthisfile ]]; then
             . /config/.donoteditthisfile
         fi
-        if [[ "$SERVERURL" != "$ORIG_SERVERURL" ]] || [[ "$SERVERPORT" != "$ORIG_SERVERPORT" ]] || [[ "$PEERDNS" != "$ORIG_PEERDNS" ]] || [[ "$PEERS" != "$ORIG_PEERS" ]] || [[ "$INTERFACE" != "$ORIG_INTERFACE" ]] || [[ "$ALLOWEDIPS" != "$ORIG_ALLOWEDIPS" ]] || [[ "$PERSISTENTKEEPALIVE_PEERS" != "$ORIG_PERSISTENTKEEPALIVE_PEERS" ]]; then
+        if [[ "$SERVERURL" != "$ORIG_SERVERURL" ]] || [[ "$SERVERPORT" != "$ORIG_SERVERPORT" ]] || [[ "$PEERDNS" != "$ORIG_PEERDNS" ]] || [[ "$PEERS" != "$ORIG_PEERS" ]] || [[ "$INTERFACE" != "$ORIG_INTERFACE" ]] || [[ "$INTERFACE6" != "$ORIG_INTERFACE6" ]] || [[ "$ALLOWEDIPS" != "$ORIG_ALLOWEDIPS" ]] || [[ "$PERSISTENTKEEPALIVE_PEERS" != "$ORIG_PERSISTENTKEEPALIVE_PEERS" ]]; then
             echo "**** Server related environment variables changed, regenerating 1 server and ${PEERS} peer/client confs ****"
             generate_confs
             save_vars
